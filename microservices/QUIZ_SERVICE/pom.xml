@@ -38,6 +38,25 @@
     <artifactId>spring-boot-starter-web</artifactId>
 </dependency>
 
+ <dependency>
+        <groupId>io.github.resilience4j</groupId>
+        <!-- For Spring Boot 3.x -->
+        <artifactId>resilience4j-spring-boot3</artifactId>
+        <version>2.2.0</version>
+    </dependency>
+
+    <!-- AOP is needed for annotations like @CircuitBreaker -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-aop</artifactId>
+    </dependency>
+
+    <!-- Your web dependency -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-web</artifactId>
+    </dependency>
+
 
         <!-- Eureka Client -->
         <dependency>

@@ -1,5 +1,6 @@
 package com.example.demo.service;
 
+import java.util.Collections;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,40 +14,63 @@ import com.example.demo.entity.Response;
 import com.example.demo.feign.QuizInterface;
 import com.example.demo.repository.QuizRepository;
 
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+
 @Service
 public class QuizService {
 
-	@Autowired
-	QuizRepository quizDao;
+    @Autowired
+    QuizRepository quizDao;
 
-	@Autowired
-	QuizInterface quizInterface;
+    @Autowired
+    QuizInterface quizInterface;
 
-	public ResponseEntity<String> createQuiz(String category, int numQ, String title) {
+    private static final String CB_NAME = "questionServiceCB";
 
-		List<Integer> questions = quizInterface.getQuestionsForQuiz(category, numQ).getBody();
-		Quiz quiz = new Quiz();
-		quiz.setTitle(title);
-		if (questions.size() > numQ) {
-			questions = questions.subList(0, numQ);
-		}
-		quiz.setQuestionIds(questions);
-		quizDao.save(quiz);
 
-		return new ResponseEntity<>("Success", HttpStatus.CREATED);
+    @CircuitBreaker(name = CB_NAME, fallbackMethod = "createQuizFallback")
+    public ResponseEntity<String> createQuiz(String category, int numQ, String title) {
 
-	}
+        List<Integer> questions = quizInterface.getQuestionsForQuiz(category, numQ).getBody();
 
-	public ResponseEntity<List<QuestionWrapper>> getQuizQuestions(Integer id) {
-		Quiz quiz = quizDao.findById(id).get();
-		List<Integer> questionIds = quiz.getQuestionIds();
-		ResponseEntity<List<QuestionWrapper>> questions = quizInterface.getQuestionsFromId(questionIds);
-		return questions;
+        Quiz quiz = new Quiz();
+        quiz.setTitle(title);
+        quiz.setQuestionIds(questions);
+        quizDao.save(quiz);
 
-	}
+        return new ResponseEntity<>("Success", HttpStatus.CREATED);
+    }
 
-	public ResponseEntity<Integer> calculateResult(Integer id, List<Response> responses) {
-		ResponseEntity<Integer> score = quizInterface.getScore(responses);
-		return score;
-	}
+    public ResponseEntity<String> createQuizFallback(String category, int numQ, String title, Throwable ex) {
+        System.out.println("Fallback createQuiz: " + ex.getMessage());
+        return new ResponseEntity<>("Question Service is Down! Try later.", HttpStatus.SERVICE_UNAVAILABLE);
+    }
+
+
+    @CircuitBreaker(name = CB_NAME, fallbackMethod = "getQuizQuestionsFallback")
+    public ResponseEntity<List<QuestionWrapper>> getQuizQuestions(Integer id) {
+        Quiz quiz = quizDao.findById(id).get();
+        List<Integer> questionIds = quiz.getQuestionIds();
+        ResponseEntity<List<QuestionWrapper>> questions = quizInterface.getQuestionsFromId(questionIds);
+        return questions;
+    }
+
+
+    public ResponseEntity<List<QuestionWrapper>> getQuizQuestionsFallback(Integer id, Throwable ex) {
+        System.out.println("Fallback getQuizQuestions: " + ex.getMessage());
+        return new ResponseEntity<>(Collections.emptyList(), HttpStatus.SERVICE_UNAVAILABLE);
+    }
+
+
+    @CircuitBreaker(name = CB_NAME, fallbackMethod = "calculateResultFallback")
+    public ResponseEntity<Integer> calculateResult(Integer id, List<Response> responses) {
+        ResponseEntity<Integer> score = quizInterface.getScore(responses);
+        return score;
+    }
+
+
+    public ResponseEntity<Integer> calculateResultFallback(Integer id, List<Response> responses, Throwable ex) {
+        System.out.println("Fallback calculateResult: " + ex.getMessage());
+        return new ResponseEntity<>(0, HttpStatus.SERVICE_UNAVAILABLE);
+    }
 }
